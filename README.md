@@ -1,2 +1,2 @@
 # repo
- repo for github
+ Quantitative Framework for backtesting and simulating alpha factors.
