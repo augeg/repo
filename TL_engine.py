@@ -3,6 +3,7 @@
 # Importing major python module 
 import pandas as pd
 import numpy as np
+import math
 
 # import seaborn as sns
 import matplotlib.pyplot as plt
@@ -18,19 +19,18 @@ class Engine():
     Main engine - used for running the backtest process
     """
     
-    def __init__(self, cash_init = 1000):
+    def __init__(self, data,  cash_init = 1000, start_date = "20240101", end_date = "20240901"):
         self.strategy = None
         self.cash = cash_init
-        self.universe = list(pd.read_excel("C:/Sauvegarde/Trading_house/ISIN_LIST.xlsx").iloc[:,0]) # Liste de l'univers investissable
-        self.data = TL_D.get_historical_data(self.universe, ["PX_LAST", "PX_OPEN","LOW", 'HIGH'], "20240101", "20240901")
-        self.current_date = None
+        self.universe = list(pd.read_excel("C:/Sauvegarde/Trading_house/Ref_data.xlsx")["TICKER"]) # Liste de l'univers investissable
+        self.data = data
         self.portfolio = Portfolio()
         self.NAV = 0
         self.initial_cash = cash_init
     
     def summary(self)                    :
         # Create a dataframe with the cash and stock holdings at the end of each bar
-        df = pd.DataFrame({'stock':self.portfolio.NAV_series, 'cash':self.portfolio.cash_series}).fillna(method='bfill')
+        df = pd.DataFrame({'stock':self.portfolio.NAV_series, 'cash':self.portfolio.cash_series}).bfill()
         df['total_aum'] = df['stock'] + df['cash']
         return df  
     
@@ -89,60 +89,60 @@ class Engine():
             # A strategy can have n orders
             
             fill_price = self.data.loc[self.current_date][order.ticker]['PX_OPEN']
-            can_fill = False
-
-            if order.side == 'buy' and self.cash >= self.data.loc[self.current_date][order.ticker]['PX_OPEN'] * order.size:
-                if order.type == 'limit':
-                
-                # LIMIT BUY ORDERS ONLY GET FILLED IF THE LIMIT PRICE IS GREATER THAN OR EQUAL TO THE LOW PRICE
-                    if order.limit_price >= self.data.loc[self.current_date][order.ticker]['LOW']:
-                        fill_price = order.limit_price
-                        can_fill = True
-                        print(self.current_date, 'Buy Filled. ', "limit",order.limit_price," / low", self.data.loc[self.current_date][order.ticker]['LOW'])
-                    else :
-                        print(self.current_date,'Buy NOT filled. ', "limit",order.limit_price," / low", self.data.loc[self.current_date][order.ticker]['LOW'])
-                else :
-                    can_fill = True
-                    
-            elif order.side == 'sell' and self.strategy.position_size >= order.size:
-                if order.type == 'limit':
-                #LIMIT SELL ORDERS ONLY GET FILLED IF THE LIMIT PRICE IS LESS THAN OR EQUAL TO THE HIGH PRICE
-                
-                    if order.limit_price <= self.data.loc[self.current_date][order.ticker]['HIGH']:
-                        fill_price = order.limit_price
-                        can_fill = True
-                        print(self.current_date,'Sell filled. ', "limit",order.limit_price," / high", self.data.loc[self.current_date][order.ticker]['HIGH'])
-                    else:
-                        print(self.current_date,'Sell NOT filled. ', "limit",order.limit_price," / high", self.data.loc[self.current_date][order.ticker]['HIGH'])
-                
-                else:
-                    can_fill = True
-                           
-            if can_fill:
-                t = Trade(
-                    
-                    ticker = order.ticker,
-                    side = order.side,
-                    price = fill_price,
-                    size = order.size,
-                    type = order.type,
-                    idx = self.current_date)
+            if math.isnan(fill_price) == False :
+            
+                can_fill = False
     
-                self.strategy.trades.append(t)
-                self.cash -= t.price * t.size
-                
-                print("filling portfolio with positions ...")
-                p = Position(
-                    t.ticker,
-                    t.size,
-                    t.price,
-                    t.type,
-                    t.idx)
-
-                
-                self.portfolio.add_or_update_position(p)
+                if order.side == 'buy' and self.cash >= self.data.loc[self.current_date][order.ticker]['PX_OPEN'] * order.size:
+                    if order.type == 'limit':
+                    
+                    # LIMIT BUY ORDERS ONLY GET FILLED IF THE LIMIT PRICE IS GREATER THAN OR EQUAL TO THE LOW PRICE
+                        if order.limit_price >= self.data.loc[self.current_date][order.ticker]['LOW']:
+                            fill_price = order.limit_price
+                            can_fill = True
+                            print(self.current_date, 'Buy Filled. ', "limit",order.limit_price," / low", self.data.loc[self.current_date][order.ticker]['LOW'])
+                        else :
+                            print(self.current_date,'Buy NOT filled. ', "limit",order.limit_price," / low", self.data.loc[self.current_date][order.ticker]['LOW'])
+                    else :
+                        can_fill = True
+                        
+                elif order.side == 'sell' and self.strategy.position_size >= order.size:
+                    if order.type == 'limit':
+                    #LIMIT SELL ORDERS ONLY GET FILLED IF THE LIMIT PRICE IS LESS THAN OR EQUAL TO THE HIGH PRICE
+                    
+                        if order.limit_price <= self.data.loc[self.current_date][order.ticker]['HIGH']:
+                            fill_price = order.limit_price
+                            can_fill = True
+                            print(self.current_date,'Sell filled. ', "limit",order.limit_price," / high", self.data.loc[self.current_date][order.ticker]['HIGH'])
+                        else:
+                            print(self.current_date,'Sell NOT filled. ', "limit",order.limit_price," / high", self.data.loc[self.current_date][order.ticker]['HIGH'])
+                    
+                    else:
+                        can_fill = True
+                               
+                if can_fill:
+                    t = Trade(
+                        ticker = order.ticker,
+                        side = order.side,
+                        price = fill_price,
+                        size = order.size,
+                        type = order.type,
+                        idx = self.current_date)
+                    
+                    self.strategy.trades.append(t)
+                    self.cash -= t.price * t.size
+                    
+                    p = Position(
+                        t.ticker,
+                        t.size,
+                        t.price,
+                        t.type,
+                        t.idx)
+    
+                    
+                    self.portfolio.add_or_update_position(p)
         
-        print(self.portfolio.positions)
+        #print(self.portfolio.positions)
         
         
         # Reinitialization when orders are completed - or not filled
@@ -245,7 +245,6 @@ class Strategy():
 
     @property
     def position_size(self):
-        print("Getting position size ... ")
         return sum([t.size for t in self.trades])
 
     def add_cash(self, cash_init:int):
@@ -300,12 +299,17 @@ class Order(TL_I.Equity):
         self.type = order_type
         self.limit_price = limit_price
 
-        @property
-        def ticker(self):
-            print("Getting ticker")
-            return self.instrument.ticker
+    def __repr__(self):
+        """
+        Better describing of our orders
+        
+        Returns
+        -------
+        str
+            DESCRIPTION.
 
-
+        """
+        return f'<Order: {self.idx} {self.ticker} {self.size}>'
 
 class Position():
     """
@@ -378,7 +382,7 @@ class Portfolio():
                     print("Closing positions ...")
                     self.positions.remove(pos)
                 else :
-                    print("Updating positions ...")
+                    pass
                 
                 update = True
         

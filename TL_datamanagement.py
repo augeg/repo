@@ -1,4 +1,5 @@
 # Data Management module 
+import pandas as pd
 
 # Bloomberg API et stuff
 import pdblp
@@ -9,7 +10,7 @@ def get_historical_data(tickers, fields, start_date, end_date):
     
     """
     INPUTS : 
-     - tickers :: list of ticker - ex : /isin/ + isin code
+     - tickers :: list of ticker - ex : TEP FP EQUITY
      - fields :: list of field
      - start_date :: date format (YYYYMMDD)
      - end_date :: date format (YYYYMMDD)
@@ -21,22 +22,18 @@ def get_historical_data(tickers, fields, start_date, end_date):
          PX_LAST, PX_OPEN, LOW, HIGH per asset
     
     """
-    
-    tickers_isin = ['/isin/' + str(t) for t in tickers]
-    
+   
+    frames = []
     con = pdblp.BCon(debug = False, port = 8194, timeout=500000)
     con.start()
     temp_dir = mkdtemp()
     cacher = joblib.Memory(temp_dir)
     bdh = cacher.cache(con.bdh, ignore = ['self'])
     
-    df = bdh(tickers_isin, fields, start_date, end_date)
+    for el in tickers:
+        frames.append(bdh(el, fields, start_date, end_date))
     
-    # Renaming DataFrame columns for better visualisation
-    col_dict = {}
-    for i,j in zip(tickers, tickers_isin):
-        col_dict[j] = i
     
-    df = df.rename(columns=col_dict)
+    df = pd.concat(frames, axis = 1)
     
     return df

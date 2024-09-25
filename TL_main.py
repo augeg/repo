@@ -2,89 +2,10 @@
 
 import pandas as pd
 import matplotlib.pyplot as plt
-import math
-
-# Custom module
 import TL_engine as TL_E
+import TL_strategy as TL_S
 import TL_datamanagement as TL_D
-import TL_instrument as TL_I
 
-
-class BuyAndSellSwitch(TL_E.Strategy):
-    
-    """
-    At first we only deal a 1 ticker strategy and then we'll adapt to many. Each strategy must have the same format
-    
-    INPUT : list_equities = List of ISIN for each equity we need
-    """
-    def __init__(self, equities):
-        super().__init__()
-        print("Strat initialization ...")
-        self.equities = [TL_I.Equity(eq) for eq in equities] # 
-        self.tickers = [t.ticker for t in self.equities]
-        
-        # other stuff specific to the current strategy
-        
-        
-    def activation(self):
-        print(self.position_size)  
-        
-        
-        if self.position_size == 0:
-            # Buy Side :
-            limit_price = self.data[self.tickers[0]]['PX_OPEN'].mean() * 0.995
-            
-            # Order :
-            self.buy_limit(self.tickers[0], size=1, limit_price=limit_price)
-            
-            print(self.current_date,"buy")
-        else:
-            
-            # Sell Side :
-            limit_price = self.data[self.tickers[0]]['PX_OPEN'].mean() * 1.005
-            
-            # Order :
-            self.sell_limit(self.tickers[0], size=1,limit_price=limit_price)
-            print(self.current_date,"sell")
-    
-class SMACrossover(TL_E.Strategy):
-    """
-    At first we only deal a 1 ticker strategy and then we'll adapt to many. Each strategy must have the same format
-    
-    INPUT : list_equities = List of ISIN for each equity we need
-    """
-    def __init__(self, equities):
-        super().__init__()
-        print("Strat initialization ...")
-        self.equities = [TL_I.Equity(eq) for eq in equities] # 
-        self.tickers = [t.ticker for t in self.equities]
-        
-        # other stuff specific to the current strategy
-
-        
-    def activation(self):
-        self.tmp_data = self.data[self.tickers[0]]
-        self.tmp_data['sma12'] = self.data[self.tickers[0]]['PX_LAST'].rolling(12).mean()
-        self.tmp_data['sma24'] = self.data[self.tickers[0]]['PX_LAST'].rolling(24).mean()
-        
-        if self.position_size == 0:
-            
-            if self.tmp_data['sma12'].loc[self.current_date] > self.tmp_data['sma24'].loc[self.current_date] :
-
-                limit_price = self.tmp_data['PX_LAST'].loc[self.current_date] * 0.995
-                
-                order_size = math.floor(self.cash / limit_price)
-                
-                self.buy_limit(self.tickers[0], size=order_size, limit_price=limit_price)
-                
-        elif self.tmp_data['sma12'].loc[self.current_date] < self.tmp_data['sma24'].loc[self.current_date] :
-            
-            limit_price = self.tmp_data['PX_LAST'].loc[self.current_date] * 1.005
-            
-            self.sell_limit(self.tickers[0], size=self.position_size, limit_price=limit_price)
-              
-        else :
-            pass
 
 if __name__ == "__main__" :
     
@@ -92,12 +13,23 @@ if __name__ == "__main__" :
     
     
     # Create strategy
-    engine = TL_E.Engine()       
-    engine.add_strategy(SMACrossover(["US0378331005", "US67066G1040"]))
+    universe = list(pd.read_excel("C:/Sauvegarde/Trading_house/Ref_data.xlsx")["TICKER"]) # Liste de l'univers investissable
+    data = TL_D.get_historical_data(universe, ["PX_LAST", "PX_OPEN"], start_date = "20240101", end_date = "20240901")
+    engine = TL_E.Engine(data, cash_init = 1000000) 
+    df = engine.data
+    
+    #s = df[t].iloc[:,[2 * i for i in range(len(t))]]
+    
+    engine.add_strategy(TL_S.momentum_1_yr())
     engine.run()
     
+    engine.portfolio.NAV_series
+    engine.portfolio.cash_series
     df = engine.summary()
-    plt.plot(df['total_aum'],label='Strategy')
+    df['bench'] = (1+engine.data["CAC Index"]["PX_LAST"].ffill().pct_change())*1000000
+    df[['total_aum','bench']].plot()
+
+    plt.plot()
     plt.legend()
     plt.show()
 
