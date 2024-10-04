@@ -1,6 +1,3 @@
-# /!\ Disclaimer 
- This is just for mechanism display. 
-
 # Description
  Quantitative Framework for backtesting and simulating alpha factors.
 
